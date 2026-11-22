@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Update FastMCP to a release that includes upstream security fixes.
+
 ## 0.1.0
 
 - Serve KeePass vaults through REST and Streamable HTTP MCP with scoped client tokens.
