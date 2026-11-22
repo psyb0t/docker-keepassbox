@@ -34,7 +34,45 @@ The published image is `psyb0t/keepassbox:latest`. Start from the [Compose file]
 
 ## Configuration
 
-Each client in the access file needs an `owner` and a `token`. The installer writes a full-access token. For custom access files, see [scope defaults and image compatibility](api.md#access). Restart KeePassBox after editing the access file.
+### Access file example
+
+For an installer-managed setup, edit `$(keepassbox config)/access.local.json`. Keep the generated token and append any new clients to the `clients` array. This example gives two tokens access to the same owner's vaults. The first can manage vaults and read secrets. The second can list entries and inspect metadata.
+
+```json
+{
+  "clients": [
+    {
+      "owner": "automation",
+      "token": "REPLACE_WITH_EXISTING_INSTALLER_TOKEN",
+      "scopes": [
+        "vaults:create",
+        "entries:read",
+        "entries:write",
+        "secrets:read",
+        "vaults:admin"
+      ]
+    },
+    {
+      "owner": "automation",
+      "token": "REPLACE_WITH_NEW_RANDOM_TOKEN",
+      "scopes": [
+        "entries:read"
+      ]
+    }
+  ]
+}
+```
+
+Generate a different token for each new client with `openssl rand -hex 32`. Use a different `owner` when clients should have separate vaults. The example works with `v0.1.1`. For builds that support omitting `scopes`, see [scope defaults](api.md#access).
+
+Restart the installer-managed service after saving the file:
+
+```bash
+keepassbox stop
+keepassbox start
+```
+
+### Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

@@ -12,6 +12,8 @@ Use `Authorization: Bearer <token>` for `/v1` and `/mcp`. Fetch the OpenAPI sche
 
 The installer token has all five scopes, including permission to retrieve passwords and TOTP codes over REST and MCP. In builds from `main`, omit `scopes` to give a custom token all five permissions for its owner. Set a nonempty list from the table below to restrict a token. The `v0.1.1` image requires an explicit list in custom access files.
 
+See the [access file example](install.md#access-file-example) for a full-access token and a restricted token.
+
 | Scope | Operations |
 | --- | --- |
 | `vaults:create` | Create a writable vault in the caller's owner directory. |
