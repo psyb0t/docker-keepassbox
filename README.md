@@ -5,41 +5,44 @@
 [![license](https://raw.githubusercontent.com/psyb0t/docker-keepassbox/badges/license.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/keepassbox?style=flat-square)](https://hub.docker.com/r/psyb0t/keepassbox)
 
-Self-hosted REST API and MCP server for KeePass. Create a vault, manage entries, and generate TOTP codes. The data lives in real `.kdbx` files you can open in KeePassXC.
+Put KeePass behind REST and MCP. Create a vault, rotate its master password, turn Argon2 up to 512 MiB, or grab a TOTP code from the terminal. You can open the same `.kdbx` in KeePassXC.
+
+## Contents
+
+- [Quick start](#quick-start)
+- [What it does](#what-it-does)
+- [Agent integrations](#agent-integrations)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Sponsor](#sponsor)
+- [License](#license)
 
 ## Quick start
 
-```sh
-git clone https://github.com/psyb0t/docker-keepassbox.git
-cd docker-keepassbox
-cp access.example.json access.local.json
-openssl rand -hex 32
-```
-
-Replace `REPLACE_ME` in `access.local.json` with the generated token. Give the container's UID 10001 read access to that file. On a standard Linux Docker install:
+Run this as your regular Docker user on Linux. You need Docker Compose, curl, and OpenSSL.
 
 ```sh
-sudo chown 10001:10001 access.local.json
-sudo chmod 0400 access.local.json
-docker compose up -d
-curl -fsS http://localhost:8000/healthz
+curl -fsSL https://raw.githubusercontent.com/psyb0t/docker-keepassbox/main/install.sh | bash
+keepassbox start
 ```
 
-The Compose file binds to loopback and gives a 512 MiB Argon2 operation room to run. Keep the data volume and back up its encrypted vaults. Use HTTPS through your trusted proxy when connecting remotely. See [deployment](docs/install.md) for paths and key files.
+If your shell can't find the command, run `~/.local/bin/keepassbox start`. The installer generates your bearer token. Run `keepassbox token` to read it. REST is at `http://localhost:8000/v1`, and MCP is at `http://localhost:8000/mcp`.
+
+The installer puts the Compose files and vaults in `~/.config/keepassbox/` by default and uses the published `psyb0t/keepassbox:latest` image. See the [install guide](https://psyb0t.github.io/docker-keepassbox/install/) to pin a version, change the port, or upgrade.
 
 ## What it does
 
 - Create and unlock multiple vaults with a master password, a configured key file, or both.
 - Change the KDBX 4 cipher, KDF, Argon2 memory, iterations, parallelism, and compression. Rotate the password or key file separately.
-- Create and search entries and groups, move or trash entries, and edit passwords, notes, tags, protected fields, and small attachments.
+- Create groups, search entries, move or trash them, and edit passwords, notes, tags, protected fields, and small attachments.
 - Save a TOTP seed or URI inside an entry and return the current code and expiry.
 - Scope each bearer token to one owner and a set of permissions. REST and MCP use the same checks.
 
-This release covers the [documented API](docs/api.md). KeePassXC desktop integrations, hardware unlock, merge and sync, format conversion, and entry history restore are outside the current API. Ordinary edits preserve entry history already in the file.
+Ordinary edits preserve entry history. The [API reference](https://psyb0t.github.io/docker-keepassbox/api/) lists the supported operations and file formats.
 
 ## Agent integrations
 
-Connect a Streamable HTTP MCP client to `http://localhost:8000/mcp` and configure its scoped bearer token. See [MCP configuration](docs/mcp.md).
+Connect a Streamable HTTP MCP client to `http://localhost:8000/mcp` and configure its bearer token. See [MCP configuration](https://psyb0t.github.io/docker-keepassbox/mcp/).
 
 ```sh
 openclaw skills install @psyb0t/docker-keepassbox
@@ -47,6 +50,10 @@ openclaw plugins install clawhub:@psyb0t/keepassbox
 ```
 
 Configure `KEEPASSBOX_URL` and `KEEPASSBOX_TOKEN` for the OpenClaw bridge.
+
+## Documentation
+
+Read the [KeePassBox docs](https://psyb0t.github.io/docker-keepassbox/) for install options, vault security settings, and the REST and MCP commands.
 
 ## Development
 
@@ -61,7 +68,9 @@ The tests run in Docker with synthetic KDBX files. The engine tests check encryp
 
 ## Sponsor
 
-[GitHub Sponsors](https://github.com/sponsors/psyb0t) · [Buy me a coffee](https://www.buymeacoffee.com/psyb0t)
+[Sponsor on GitHub](https://github.com/sponsors/psyb0t)
+
+<a href="https://www.buymeacoffee.com/psyb0t"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me a Coffee" height="60" width="217"></a>
 
 ## License
 

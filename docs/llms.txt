@@ -1,0 +1,15 @@
+---
+layout: null
+permalink: /llms.txt
+nav_exclude: true
+search_exclude: true
+sitemap: false
+---
+# KeePassBox
+
+> Manage KeePass vaults, entries, and TOTP over REST and MCP.
+
+{% assign pages = site.pages | where_exp: "item", "item.description" | sort: "nav_order" -%}
+{% for item in pages -%}
+- [{{ item.title }}]({{ item.url | absolute_url }}): {{ item.description }}
+{% endfor -%}

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Install the published image through Docker Compose with a generated token and a `keepassbox` command for starting, upgrading, and uninstalling.
+- Match the documentation site's layout to ModemBox and Mailbox.
+
 ## 0.1.1
 
 - Update FastMCP to a release that includes upstream security fixes.

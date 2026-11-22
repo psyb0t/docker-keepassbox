@@ -1,5 +1,7 @@
 ---
 title: REST API
+description: Create and unlock KeePass vaults, set ciphers and Argon2 parameters, manage entries, and retrieve TOTP codes through REST.
+nav_order: 3
 ---
 
 # REST API
@@ -30,7 +32,7 @@ PATCH /v1/vaults/{vault}/security
 POST  /v1/vaults/{vault}/rekey
 ```
 
-Create accepts `id`, `name`, `credentials`, and optional `security`. Credentials accept `password`, `keyFile` (a configured alias), or both. Security is a full settings object. The following settings use 512 MiB:
+Create accepts `id`, `name`, `credentials`, and optional `security`. Set `password`, `keyFile` (a configured alias), or both. Send the whole security object when changing settings. This one sets Argon2id to 512 MiB:
 
 ```json
 {
@@ -57,3 +59,5 @@ List or create using `/v1/vaults/{vault}/entries` and `/v1/vaults/{vault}/groups
 Use `GET`, `PATCH`, or `DELETE` at `/v1/vaults/{vault}/entries/{entry}`. Deleting an entry moves it to the recycle bin. Write an OTP seed or URI with `PUT .../totp` and generate a code with `POST .../totp/code`. The code response includes an expiry as Unix seconds.
 
 Reveal a password or note with `POST .../reveal?field=password` or `?field=notes`. Store a protected field with `PUT .../fields/{name}` and read it through `POST .../fields/{name}/reveal`. The KDBX entry stores these fields with a `custom:` prefix. Attachments use `GET` and `POST .../attachments` and `GET .../attachments/{index}`. Inline transfer is capped at 32 KiB per attachment.
+
+Use KeePassXC for desktop integrations, hardware unlock, merge and sync, format conversion, and entry history restore.
