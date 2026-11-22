@@ -11,17 +11,21 @@ from keepassbox.service import generate_password, otp_from
 FIXTURE_PASSWORD = "example-fixture-password"
 
 
+@pytest.mark.parametrize("cipher", ["aes256", "chacha20", "twofish"])
+@pytest.mark.parametrize("compression", [False, True])
 @pytest.mark.parametrize(
-    ("cipher", "kdf"),
+    "kdf",
     [
-        ("aes256", AESKdf(algorithm="aes-kdf", rounds=100_000)),
-        ("chacha20", Argon2(algorithm="argon2id", memoryMiB=512, iterations=2)),
-        ("twofish", Argon2(algorithm="argon2d", memoryMiB=16, iterations=2)),
+        AESKdf(algorithm="aes-kdf", rounds=100_000),
+        Argon2(algorithm="argon2id", memoryMiB=8, iterations=2, version=16),
+        Argon2(algorithm="argon2id", memoryMiB=8, iterations=2, version=19),
+        Argon2(algorithm="argon2d", memoryMiB=8, iterations=2, version=16),
+        Argon2(algorithm="argon2d", memoryMiB=8, iterations=2, version=19),
     ],
 )
-def test_encrypted_round_trip(tmp_path: Path, cipher, kdf):
+def test_encrypted_round_trip(tmp_path: Path, cipher, compression, kdf):
     path = tmp_path / "probe.kdbx"
-    settings = Security(cipher=cipher, kdf=kdf)
+    settings = Security(cipher=cipher, compression=compression, kdf=kdf)
     vault = engine.blank_vault(FIXTURE_PASSWORD, None)
     entry = vault.add_entry(vault.root_group, "Probe", "alice", "example-secret")
     entry.save_history()
@@ -52,3 +56,16 @@ def test_password_and_memory_policy():
     assert any(not char.isalnum() for char in password)
     with pytest.raises(Problem, match="KDF memory limit"):
         engine.enforce_memory(Security(kdf=Argon2(memoryMiB=512)), 256)
+
+
+def test_create_and_reopen_512_mib_vault(tmp_path):
+    path = tmp_path / "memory.kdbx"
+    settings = Security(cipher="chacha20", kdf=Argon2(memoryMiB=512, iterations=2))
+    vault = engine.blank_vault(FIXTURE_PASSWORD, None)
+    engine.apply_crypto(vault, settings)
+    engine.verified_save(vault, path, FIXTURE_PASSWORD, None, 512, None)
+    with path.open("rb") as file:
+        with pytest.raises(Problem, match="KDF memory limit"):
+            engine.open_vault(file, FIXTURE_PASSWORD, None, 511)
+        reopened = engine.open_vault(file, FIXTURE_PASSWORD, None, 512)
+    assert engine.crypto_settings(reopened.kdbx.header.value) == settings
