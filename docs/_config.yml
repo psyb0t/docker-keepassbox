@@ -1,0 +1,3 @@
+title: KeePassBox
+description: Manage KeePass vaults, entries, and TOTP over REST and MCP.
+theme: jekyll-theme-cayman

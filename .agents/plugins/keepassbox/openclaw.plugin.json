@@ -1,0 +1,53 @@
+{
+  "name": "@psyb0t/keepassbox",
+  "id": "@psyb0t/keepassbox",
+  "version": "0.0.0",
+  "type": "code-plugin",
+  "summary": "Connect to a self-hosted KeePassBox over MCP.",
+  "description": "Manage the KeePass vaults and entries authorized by the configured token. https://github.com/psyb0t/docker-keepassbox",
+  "extensions": [
+    "./index.js"
+  ],
+  "mcpServers": {
+    "keepassbox": {
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "./bin/cli.js"
+      ]
+    }
+  },
+  "compat": {
+    "pluginApi": ">=2026.3.24-beta.2"
+  },
+  "build": {
+    "openclawVersion": "2026.3.24-beta.2"
+  },
+  "environment": {
+    "KEEPASSBOX_URL": {
+      "required": true,
+      "description": "Base URL of the trusted KeePassBox instance."
+    },
+    "KEEPASSBOX_TOKEN": {
+      "required": true,
+      "description": "Scoped bearer token sent to that instance."
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "required": [
+      "url",
+      "token"
+    ],
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "Trusted KeePassBox base URL."
+      },
+      "token": {
+        "type": "string",
+        "description": "Scoped bearer token."
+      }
+    }
+  }
+}

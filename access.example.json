@@ -1,0 +1,9 @@
+{
+  "clients": [
+    {
+      "owner": "automation",
+      "token": "REPLACE_ME",
+      "scopes": ["vaults:create", "entries:read", "entries:write", "secrets:read", "vaults:admin"]
+    }
+  ]
+}

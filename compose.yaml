@@ -1,0 +1,35 @@
+services:
+  keepassbox:
+    image: psyb0t/keepassbox:latest
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 128
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    volumes:
+      - vaults:/data
+    secrets:
+      - keepassbox_access
+    networks: [keepassbox]
+
+volumes:
+  vaults:
+
+secrets:
+  keepassbox_access:
+    file: ./access.local.json
+
+networks:
+  keepassbox:
