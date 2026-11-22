@@ -1,0 +1,8 @@
+# KeePassBox
+
+> Manage KeePass vaults, entries, and TOTP over REST and MCP.
+
+- [Install KeePassBox](https://psyb0t.github.io/docker-keepassbox/install/): Docker Compose, access tokens, Tailscale, and vault backups.
+- [REST API](https://psyb0t.github.io/docker-keepassbox/api/): Authentication, first call, and generated endpoint documentation.
+- [OpenAPI document](https://psyb0t.github.io/docker-keepassbox/reference/openapi.json): Machine-readable REST contract.
+- [MCP](https://psyb0t.github.io/docker-keepassbox/mcp/): Client setup and Streamable HTTP examples.

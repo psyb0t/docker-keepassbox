@@ -39,7 +39,7 @@ The installer puts the Compose files and vaults in `~/.config/keepassbox/` by de
 - Save a TOTP seed or URI inside an entry and return the current code and expiry.
 - Give each bearer token access to one owner's vaults. Restrict individual tokens with a custom [scope list](https://psyb0t.github.io/docker-keepassbox/api/#access).
 
-Ordinary edits preserve entry history. See the [REST guide](https://psyb0t.github.io/docker-keepassbox/api/) for a walkthrough and the [API reference](https://psyb0t.github.io/docker-keepassbox/reference/) for endpoint parameters, examples, and errors.
+Ordinary edits preserve entry history. See [REST API](https://psyb0t.github.io/docker-keepassbox/api/) for authentication, a walkthrough, and the endpoint reference.
 
 ## Agent integrations
 

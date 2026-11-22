@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Build the GitHub Pages site with Docusaurus. Find the REST walkthrough and generated endpoint pages under one REST API entry.
 - Render the searchable REST reference from OpenAPI, with parameter descriptions, copyable curl requests, response examples, and error codes for each endpoint.
 - Check in the exported OpenAPI document for GitHub Pages and reject stale exports in CI.
 

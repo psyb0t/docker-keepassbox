@@ -2,6 +2,7 @@
 title: Home
 description: Create and rekey KeePass KDBX vaults, tune Argon2, and manage passwords or TOTP through KeePassBox's REST and MCP endpoints.
 permalink: /
+slug: /
 nav_order: 1
 seo:
   type: WebSite
@@ -17,5 +18,4 @@ Give a script or agent its own KeePass vault. Use REST or MCP to add credentials
 | --- | --- |
 | Run the Docker image and get a token | [Install KeePassBox](install.md) |
 | Create a vault and generate a TOTP code from the command line | [REST walkthrough](api.md#try-it-with-curl) |
-| Look up a REST endpoint, its fields, and an example | [REST API reference]({{ '/reference/' | relative_url }}) |
 | Connect an agent or try an MCP tool over HTTP | [MCP](mcp.md) |

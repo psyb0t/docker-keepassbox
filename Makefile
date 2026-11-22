@@ -1,12 +1,15 @@
 IMAGE ?= psyb0t/keepassbox:local
 DEV_IMAGE ?= keepassbox-dev:local
 LOCK_IMAGE := keepassbox-lock:local
-DOCS_IMAGE := ghcr.io/actions/jekyll-build-pages:v1.0.13@sha256:6791ebfd912185ed59bfb5fb102664fa872496b79f87ff8b9cfba292a7345041
+DOCS_IMAGE := node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
 OPENAPI_IMAGE := openapitools/openapi-generator-cli:v7.27.0@sha256:949efd0d5cf3c093ef169887b2ebe0879ee2e8074b6476264232ce4fd8ef46d0
 OPENAPI_DOCUMENT := docs/reference/openapi.json
 DEV_RUN := docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges $(DEV_IMAGE)
+DOCS_RUN := docker run --rm --cap-drop ALL --security-opt no-new-privileges \
+	--user "$$(id -u):$$(id -g)" -e HOME=/tmp -e COREPACK_HOME=/work/.corepack \
+	-v "$(CURDIR)/website:/work" -w /work
 
-.PHONY: build dev-image pkg-lock lint format test test-unit test-integration sec generate-docs docs-build help
+.PHONY: build dev-image pkg-lock lint format test test-unit test-integration sec generate-docs docs-lock docs-audit docs-build help
 build: ## Build the release image
 	docker build --target runtime -t $(IMAGE) .
 
@@ -48,11 +51,18 @@ generate-docs: dev-image ## Export and validate the public OpenAPI document
 		chmod 0644 "$$spec"; \
 		mv "$$spec" $(OPENAPI_DOCUMENT)
 
-docs-build: generate-docs ## Build GitHub Pages locally
-	docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp \
-		-e GITHUB_WORKSPACE=/work -e GITHUB_REPOSITORY=psyb0t/docker-keepassbox \
-		-e INPUT_SOURCE=docs -e INPUT_DESTINATION=.testing/docs-site -e INPUT_VERBOSE=false \
-		-v "$(CURDIR):/work" $(DOCS_IMAGE)
+docs-lock: ## Refresh the Docusaurus lockfile
+	$(DOCS_RUN) $(DOCS_IMAGE) corepack pnpm install --lockfile-only
+
+docs-audit: ## Scan the locked Docusaurus dependencies
+	$(DOCS_RUN) $(DOCS_IMAGE) corepack pnpm audit
+
+docs-build: generate-docs ## Generate the API pages and build the static docs site
+	mkdir -p website/.content website/.assets/reference
+	cp docs/index.md docs/install.md docs/api.md docs/mcp.md website/.content/
+	cp $(OPENAPI_DOCUMENT) website/.assets/reference/openapi.json
+	$(DOCS_RUN) $(DOCS_IMAGE) corepack pnpm install --frozen-lockfile
+	$(DOCS_RUN) --network none $(DOCS_IMAGE) corepack pnpm run build
 
 help: ## List targets
 	@awk 'BEGIN { FS = ":.*## " } /^[a-z-]+:.*## / { printf "%-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)

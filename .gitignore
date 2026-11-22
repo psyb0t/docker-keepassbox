@@ -39,6 +39,11 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 node_modules/
+/website/.assets/
+/website/.content/
+/website/.corepack/
+/website/.docusaurus/
+/website/build/
 data/
 *.kdbx
 *.keyx

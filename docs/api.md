@@ -1,12 +1,12 @@
 ---
-title: REST API guide
+title: REST API
 description: Create and unlock KeePass vaults, set ciphers and Argon2 parameters, manage entries, and retrieve TOTP codes through REST.
 nav_order: 3
 ---
 
 # REST API
 
-The installer serves REST at `http://127.0.0.1:8000/v1`. Send `Authorization: Bearer <token>` with each request. Look up an operation in the [REST API reference]({{ '/reference/' | relative_url }}). Each endpoint shows its parameters, required scope, curl example, and responses. For agent tools, see [MCP](mcp.md).
+The installer serves REST at `http://127.0.0.1:8000/v1`. Send `Authorization: Bearer <token>` with protected requests. Follow the walkthrough for a first call, or choose an endpoint under REST API in the sidebar. For agent tools, see [MCP](mcp.md).
 
 ## Access
 
@@ -91,7 +91,7 @@ kb --json '{"password":"example-demo-password"}' "$base/v1/vaults/$vault/unlock"
 
 Send JSON bodies with `Content-Type: application/json`. POST, PUT, and PATCH require a `Content-Length` header and accept up to 64 KiB of request data. For a POST without a body, send a zero-length body as in the examples above. Vault IDs, key aliases, and custom field names use 1 to 64 lowercase letters, digits, hyphens, and underscores. The first character must be a letter or digit. Group and entry IDs are UUIDs.
 
-Browse the [REST API reference]({{ '/reference/' | relative_url }}) or [download the OpenAPI document]({{ '/reference/openapi.json' | relative_url }}). To get the schema for your running version, run `kb "$base/openapi.json" > keepassbox-openapi.json`.
+[Download the OpenAPI document](https://psyb0t.github.io/docker-keepassbox/reference/openapi.json). To get the schema for your running version, run `kb "$base/openapi.json" > keepassbox-openapi.json`.
 
 The reference examples default to the vault ID `demo`. The walkthrough sets `KEEPASSBOX_VAULT` and `KEEPASSBOX_ENTRY` for its test vault and entry. If you skip the walkthrough, substitute your own IDs. Set `KEEPASSBOX_GROUP` to a group UUID for the create-group example, and `KEEPASSBOX_REVISION` to the current vault revision before updating security or rekeying. Fetch a new revision after a write.
 
