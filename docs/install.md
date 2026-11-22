@@ -34,9 +34,11 @@ The published image is `psyb0t/keepassbox:latest`. Start from the [Compose file]
 
 ## Configuration
 
+Each client in the access file needs an `owner` and a `token`. The installer writes a full-access token. For custom access files, see [scope defaults and image compatibility](api.md#access). Restart KeePassBox after editing the access file.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `KEEPASSBOX_ACCESS_FILE` | `/run/secrets/keepassbox_access` | JSON list of scoped clients. The file must exist at startup. |
+| `KEEPASSBOX_ACCESS_FILE` | `/run/secrets/keepassbox_access` | JSON object with a `clients` array. The file must exist at startup. |
 | `KEEPASSBOX_DATA_DIR` | `/data` | Mounted vault directory. |
 | `KEEPASSBOX_IDLE_SECONDS` | `600` | Idle time before the service drops unlocked vault state. |
 | `KEEPASSBOX_KDF_MAX_MIB` | `512` | Maximum Argon2 memory allowed when opening or writing a vault. |

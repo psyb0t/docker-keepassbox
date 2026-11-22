@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from hmac import compare_digest
 from pathlib import Path
+from typing import get_args
 
 from pydantic import Field, SecretStr, ValidationError
 
@@ -9,12 +10,13 @@ from .models import Input, Scope, Slug
 
 ACCESS_FILE = Path("/run/secrets/keepassbox_access")
 DATA_DIR = Path("/data")
+ALL_SCOPES: frozenset[Scope] = frozenset(get_args(Scope))
 
 
 class Client(Input):
     owner: Slug
     token: SecretStr = Field(min_length=32, max_length=256)
-    scopes: frozenset[Scope] = Field(min_length=1)
+    scopes: frozenset[Scope] = Field(default=ALL_SCOPES, min_length=1)
 
 
 class Access(Input):

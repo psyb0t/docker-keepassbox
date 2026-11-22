@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Grant all scopes for the client's owner when the access file omits `scopes`. Explicit scope lists still limit access.
 - Install the published image through Docker Compose with a generated token and a `keepassbox` command for starting, upgrading, and uninstalling.
 - Match the documentation site's layout to ModemBox and Mailbox.
 

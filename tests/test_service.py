@@ -35,7 +35,7 @@ def auth(token=TOKEN):
 def config(tmp_path: Path):
     access = Access(
         clients=[
-            Client(owner="one", token=TOKEN, scopes=SCOPES),
+            Client(owner="one", token=TOKEN),
             Client(owner="one", token=READER, scopes={"entries:read"}),
             Client(owner="two", token=OTHER, scopes=SCOPES),
         ]
@@ -775,10 +775,15 @@ def test_config_from_env(tmp_path, monkeypatch):
         [entry, entry],
         [{**entry, "token": "é" * 32}],
         [{**entry, "scopes": ["all"]}],
+        [{**entry, "scopes": []}],
+        [{**entry, "scopes": None}],
     ):
         path.write_text(json.dumps({"clients": clients}), encoding="utf-8")
         invalid()
-    path.write_text(json.dumps({"clients": [entry]}), encoding="utf-8")
+    path.write_text(
+        json.dumps({"clients": [{"owner": "one", "token": TOKEN}, {**entry, "token": READER}]}),
+        encoding="utf-8",
+    )
     for name, values in (
         ("KEEPASSBOX_IDLE_SECONDS", ("4", "86401", "invalid")),
         ("KEEPASSBOX_KDF_MAX_MIB", ("63", "1025", "invalid")),
@@ -791,6 +796,8 @@ def test_config_from_env(tmp_path, monkeypatch):
     assert config.data == tmp_path / "vaults"
     assert config.idle_seconds == 5 and config.memory_mib == 1024
     assert config.authenticate(f"bEaReR {TOKEN}").owner == "one"
+    assert config.authenticate(f"Bearer {TOKEN}").scopes == SCOPES
+    assert config.authenticate(f"Bearer {READER}").scopes == {"entries:read"}
     for value in ("", f"Basic {TOKEN}", f"Bearer  {TOKEN}", "Bearer " + "é" * 32):
         assert config.authenticate(value) is None
 

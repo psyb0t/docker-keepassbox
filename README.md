@@ -26,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/psyb0t/docker-keepassbox/main/insta
 keepassbox start
 ```
 
-If your shell can't find the command, run `~/.local/bin/keepassbox start`. The installer generates your bearer token. Run `keepassbox token` to read it. REST is at `http://localhost:8000/v1`, and MCP is at `http://localhost:8000/mcp`.
+If your shell can't find the command, run `~/.local/bin/keepassbox start`. Run `keepassbox token` to get the installer-generated bearer token. It can manage its owner's vaults, read passwords, and generate TOTP codes. REST is at `http://localhost:8000/v1`, and MCP is at `http://localhost:8000/mcp`.
 
 The installer puts the Compose files and vaults in `~/.config/keepassbox/` by default and uses the published `psyb0t/keepassbox:latest` image. See the [install guide](https://psyb0t.github.io/docker-keepassbox/install/) to pin a version, change the port, or upgrade.
 
@@ -36,7 +36,7 @@ The installer puts the Compose files and vaults in `~/.config/keepassbox/` by de
 - Change the KDBX 4 cipher, KDF, Argon2 memory, iterations, parallelism, and compression. Rotate the password or key file separately.
 - Create groups, search entries, move or trash them, and edit passwords, notes, tags, protected fields, and small attachments.
 - Save a TOTP seed or URI inside an entry and return the current code and expiry.
-- Scope each bearer token to one owner and a set of permissions. REST and MCP use the same checks.
+- Give each bearer token access to one owner's vaults. Restrict individual tokens with a custom [scope list](https://psyb0t.github.io/docker-keepassbox/api/#access).
 
 Ordinary edits preserve entry history. The [API reference](https://psyb0t.github.io/docker-keepassbox/api/) lists the supported operations and file formats.
 
