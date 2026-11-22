@@ -23,6 +23,7 @@ jobs:
     with:
       lint_command: make lint
       test_command: make test
+      generate_command: make generate-docs
       sec_command: make sec
       sarif_file: sec.sarif
       sarif_category: python

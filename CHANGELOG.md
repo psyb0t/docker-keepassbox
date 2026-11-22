@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Render the searchable REST reference from OpenAPI, with parameter descriptions, copyable curl requests, response examples, and error codes for each endpoint.
+- Check in the exported OpenAPI document for GitHub Pages and reject stale exports in CI.
+
 ## 0.2.1
 
 - Publish full REST paths with mobile-friendly tables and add bearer auth, response schemas, and error envelopes to OpenAPI.

@@ -32,6 +32,8 @@ aux_links:
     - https://github.com/psyb0t/docker-keepassbox
 aux_links_new_tab: true
 nav_external_links:
+  - title: REST API reference
+    url: /docker-keepassbox/reference/
   - title: Changelog
     url: https://github.com/psyb0t/docker-keepassbox/blob/main/CHANGELOG.md
 gh_edit_link: true

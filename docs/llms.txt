@@ -9,6 +9,9 @@ sitemap: false
 
 > Manage KeePass vaults, entries, and TOTP over REST and MCP.
 
+- [REST API reference]({{ '/reference/' | absolute_url }}): Endpoints, scopes, and curl examples.
+- [OpenAPI document]({{ '/reference/openapi.json' | absolute_url }}): Machine-readable REST contract.
+
 {% assign pages = site.pages | where_exp: "item", "item.description" | sort: "nav_order" -%}
 {% for item in pages -%}
 - [{{ item.title }}]({{ item.url | absolute_url }}): {{ item.description }}

@@ -1,12 +1,12 @@
 ---
-title: REST API
+title: REST API guide
 description: Create and unlock KeePass vaults, set ciphers and Argon2 parameters, manage entries, and retrieve TOTP codes through REST.
 nav_order: 3
 ---
 
 # REST API
 
-The installer serves REST at `http://127.0.0.1:8000/v1`. Send `Authorization: Bearer <token>` with each request. The [endpoint reference](#endpoint-reference) lists requests, responses, and scope requirements. For agent tools, see [MCP](mcp.md).
+The installer serves REST at `http://127.0.0.1:8000/v1`. Send `Authorization: Bearer <token>` with each request. Look up an operation in the [REST API reference]({{ '/reference/' | relative_url }}). Each endpoint shows its parameters, required scope, curl example, and responses. For agent tools, see [MCP](mcp.md).
 
 ## Access
 
@@ -29,16 +29,31 @@ Owners isolate storage and unlocked state. Tokens assigned to the same owner sha
 [Start KeePassBox](install.md), then run these examples against a test instance in one Bash session with curl 7.82 or newer, jq, and OpenSSL. They create a demo vault with sample credentials. For a remote instance, set `KEEPASSBOX_URL` to its HTTPS base URL first. For a custom client, set `KEEPASSBOX_TOKEN` to its assigned token.
 
 ```bash
-base="${KEEPASSBOX_URL:-$(keepassbox url)}"
-token="${KEEPASSBOX_TOKEN:-$(keepassbox token)}"
-vault="demo-$(openssl rand -hex 4)"
+export KEEPASSBOX_URL="${KEEPASSBOX_URL:-$(keepassbox url)}"
+export KEEPASSBOX_TOKEN="${KEEPASSBOX_TOKEN:-$(keepassbox token)}"
+base="${KEEPASSBOX_URL%/}"
 
 kb() {
-  curl -fsS --header @<(printf 'Authorization: Bearer %s\n' "$token") "$@"
+  curl -fsS --header @<(printf 'Authorization: Bearer %s\n' "$KEEPASSBOX_TOKEN") "$@"
 }
 
-kb "$base/healthz"
+kb "$base/v1/vaults"
+```
 
+An owner with no vaults gets HTTP 200 and this response.
+
+```json
+{
+  "items": [],
+  "total": 0
+}
+```
+
+Create a vault for the rest of the walkthrough.
+
+```bash
+vault="demo-$(openssl rand -hex 4)"
+export KEEPASSBOX_VAULT="$vault"
 jq -n --arg id "$vault" '{
   id: $id,
   name: "Demo vault",
@@ -55,6 +70,7 @@ entry=$(kb --json '{
   "username": "demo@example.invalid",
   "password": "example-entry-password"
 }' "$entries" | jq -er '.id')
+export KEEPASSBOX_ENTRY="$entry"
 
 kb --data '' "$entries/$entry/reveal?field=password"
 kb -X PUT --json '{"value":"JBSWY3DPEHPK3PXP"}' "$entries/$entry/totp"
@@ -75,37 +91,9 @@ kb --json '{"password":"example-demo-password"}' "$base/v1/vaults/$vault/unlock"
 
 Send JSON bodies with `Content-Type: application/json`. POST, PUT, and PATCH require a `Content-Length` header and accept up to 64 KiB of request data. For a POST without a body, send a zero-length body as in the examples above. Vault IDs, key aliases, and custom field names use 1 to 64 lowercase letters, digits, hyphens, and underscores. The first character must be a letter or digit. Group and entry IDs are UUIDs.
 
-### Service endpoints
+Browse the [REST API reference]({{ '/reference/' | relative_url }}) or [download the OpenAPI document]({{ '/reference/openapi.json' | relative_url }}). To get the schema for your running version, run `kb "$base/openapi.json" > keepassbox-openapi.json`.
 
-| Method and path | Scope | Success |
-| --- | --- | --- |
-| `GET /healthz` | Public | 200, `{"ok":true}` |
-| `GET /version` | Public | 200, `name` and `version` |
-| `GET /openapi.json` | Any valid token | 200, OpenAPI schema |
-{: .api-endpoints }
-
-Save the live OpenAPI schema with `kb "$base/openapi.json" > keepassbox-openapi.json` after defining `kb` above.
-
-### Pagination and search
-
-Vault and entry listings return `items` and the matching `total` before pagination. `limit` defaults to 50 and accepts 1 to 100. `offset` is zero-based, defaults to 0, and accepts 0 to 100000. Entry lists also accept `q`, a case-insensitive substring filter of up to 256 characters on title, username, and tags.
-
-### Vaults
-
-Replace `{vault}` with the vault ID. To unlock a vault with ID `demo`, send `POST /v1/vaults/demo/unlock`.
-
-| Method and path | Request | Success | Scope |
-| --- | --- | --- | --- |
-| `GET /v1/vaults` | Query `limit`, `offset` | 200, page of `id` and `unlocked` | `entries:read` |
-| `POST /v1/vaults` | `id`, `name`, `credentials`, optional `security` | 201, vault details | `vaults:create` |
-| `GET /v1/vaults/{vault}` | No body | 200, vault details | `entries:read` |
-| `POST /v1/vaults/{vault}/unlock` | Credentials object | 200, vault details | `entries:read` |
-| `POST /v1/vaults/{vault}/lock` | Empty body | 200, `id` and `unlocked: false` | `entries:read` |
-| `PATCH /v1/vaults/{vault}/security` | `revision` and `security` | 200, updated vault details | `vaults:admin` |
-| `POST /v1/vaults/{vault}/rekey` | `revision` and new `credentials` | 200, updated vault details | `vaults:admin` |
-{: .api-endpoints }
-
-Vault details have `id`, `name`, `format`, `revision`, `unlocked`, and `security`. Creating a vault unlocks it. A lock clears the owner's cached unlock state for that vault. Vault details, edits, and entry operations need an unlocked vault.
+The reference examples default to the vault ID `demo`. The walkthrough sets `KEEPASSBOX_VAULT` and `KEEPASSBOX_ENTRY` for its test vault and entry. If you skip the walkthrough, substitute your own IDs. Set `KEEPASSBOX_GROUP` to a group UUID for the create-group example, and `KEEPASSBOX_REVISION` to the current vault revision before updating security or rekeying. Fetch a new revision after a write.
 
 ### Credentials and encryption
 
@@ -145,47 +133,6 @@ jq -n --arg revision "$revision" '{
 ```
 
 To change credentials, fetch a fresh revision and send it with `credentials` to `POST /v1/vaults/{vault}/rekey`. Rekey replaces the entire credential set. Send the current password or key alias again if you want to keep that factor. The [previous encrypted revision](install.md#vault-files-and-backups) requires its old credentials.
-
-### Entries and groups
-
-| Method and path | Request | Success | Scope |
-| --- | --- | --- | --- |
-| `GET /v1/vaults/{vault}/groups` | No body | 200, array of groups | `entries:read` |
-| `POST /v1/vaults/{vault}/groups` | `name`, optional `parentId` | 201, group | `entries:write` |
-| `GET /v1/vaults/{vault}/entries` | Query `q`, `limit`, `offset` | 200, page of entry metadata | `entries:read` |
-| `POST /v1/vaults/{vault}/entries` | `title` and optional entry fields | 201, entry metadata | `entries:write` |
-| `GET /v1/vaults/{vault}/entries/{entry}` | No body | 200, entry metadata | `entries:read` |
-| `PATCH /v1/vaults/{vault}/entries/{entry}` | Fields to update | 200, entry metadata | `entries:write` |
-| `DELETE /v1/vaults/{vault}/entries/{entry}` | No body | 200, `id` and `trashed: true` | `entries:write` |
-{: .api-endpoints }
-
-A group has `id`, `name`, and `parentId`. Omit `parentId` when creating a group under the root. Entry fields are `title`, `groupId`, `username`, `password`, `url`, `notes`, and `tags`. Omit `groupId` to create the entry in the root. On PATCH, fields left out or set to `null` keep their previous values. To move an entry, supply the destination group's UUID. Use an empty string to clear an optional text field or an empty array to clear tags.
-
-Entry metadata contains `id`, `title`, `username`, `url`, `tags`, `groupId`, and `hasTotp`. Deleting moves the entry to the recycle bin and removes it from entry listings.
-
-### Secrets, TOTP, and attachments
-
-| Method and path | Request | Success | Scope |
-| --- | --- | --- | --- |
-| `POST /v1/vaults/{vault}/entries/{entry}/reveal` | Query `field=password` or `field=notes`; empty body | 200, `value` | `secrets:read` |
-| `PUT /v1/vaults/{vault}/entries/{entry}/totp` | `value` with a Base32 seed or `otpauth://totp/` URI | 200, `id` and `hasTotp: true` | `entries:write` |
-| `POST /v1/vaults/{vault}/entries/{entry}/totp/code` | Empty body | 200, `code` and `expiresAt` in Unix seconds | `secrets:read` |
-| `PUT /v1/vaults/{vault}/entries/{entry}/fields/{name}` | `value` | 200, `name` | `entries:write` |
-| `POST /v1/vaults/{vault}/entries/{entry}/fields/{name}/reveal` | Empty body | 200, `value` | `secrets:read` |
-| `GET /v1/vaults/{vault}/entries/{entry}/attachments` | No body | 200, array of `index` and `name` | `entries:read` |
-| `POST /v1/vaults/{vault}/entries/{entry}/attachments` | `name` and `contentBase64` | 201, `name` | `entries:write` |
-| `GET /v1/vaults/{vault}/entries/{entry}/attachments/{index}` | Zero-based `index` from the attachment list | 200, `name` and `contentBase64` | `secrets:read` |
-{: .api-endpoints }
-
-TOTP returns the code as a string so leading zeroes survive. Regular entry reads exclude passwords, notes, OTP seeds, protected field values, and attachment contents. Custom fields are stored with a `custom:` prefix in KDBX. Inline attachment transfers accept up to 32 KiB of decoded content.
-
-### Password generation
-
-`POST /v1/passwords/generate` requires `entries:write`. Send `{}` for a 32-character password with symbols, or supply `length` (16 to 256) and `symbols` (boolean). The 200 response contains `password`. The API does not store that password in a vault.
-
-```bash
-kb --json '{"length":24,"symbols":true}' "$base/v1/passwords/generate"
-```
 
 Use KeePassXC for desktop integrations, hardware unlock, merge and sync, format conversion, and entry history restore.
 

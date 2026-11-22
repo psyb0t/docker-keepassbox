@@ -38,6 +38,7 @@ def config(tmp_path: Path):
             Client(owner="one", token=TOKEN),
             Client(owner="one", token=READER, scopes={"entries:read"}),
             Client(owner="two", token=OTHER, scopes=SCOPES),
+            *(Client(owner="one", token=f"{TOKEN}-{scope}", scopes={scope}) for scope in SCOPES),
         ]
     )
     return Config(tmp_path, access)
@@ -309,11 +310,40 @@ def test_description_endpoints(client):
         "scheme": "bearer",
     }
     assert "security" not in schema["paths"]["/healthz"]["get"]
+    assert schema["paths"]["/openapi.json"]["get"]["security"] == [{"HTTPBearer": []}]
+    assert set(
+        operation["tags"][0]
+        for methods in schema["paths"].values()
+        for operation in methods.values()
+    ) == {tag["name"] for tag in schema["tags"]}
     for path, operations in schema["paths"].items():
         if not path.startswith("/v1/"):
             continue
         for operation in operations.values():
             assert operation["security"] == [{"HTTPBearer": []}]
+            assert operation["x-required-scope"] in SCOPES
+            assert operation["description"]
+            assert operation["x-codeSamples"][0]["lang"] == "curl"
+            for parameter in operation.get("parameters", ()):
+                assert parameter["description"]
+                assert "required" in parameter
+                if parameter["in"] in {"path", "query"}:
+                    assert parameter["schema"]["examples"]
+                    assert (
+                        parameter["in"] == "path"
+                        or parameter["required"]
+                        or "default" in parameter["schema"]
+                    )
+            if body := operation.get("requestBody"):
+                content = body["content"]["application/json"]
+                assert body["required"] and "example" in content
+                request_model = content["schema"]["$ref"].rsplit("/", 1)[-1]
+                assert all(
+                    field["description"]
+                    for field in schema["components"]["schemas"][request_model][
+                        "properties"
+                    ].values()
+                )
             statuses = operation["responses"]
             assert statuses["422"]["content"]["application/json"]["schema"] == {
                 "$ref": "#/components/schemas/ProblemResponse",
@@ -321,6 +351,11 @@ def test_description_endpoints(client):
             success = next(value for status, value in statuses.items() if status.startswith("2"))
             response = success["content"]["application/json"]["schema"]
             assert "$ref" in response or response.get("type") == "array"
+            assert "example" in success["content"]["application/json"]
+            for status, record in statuses.items():
+                if status.startswith(("4", "5")):
+                    for code, example in record["content"]["application/json"]["examples"].items():
+                        assert example["value"]["code"] == code and example["description"]
     result = mcp_request(
         client,
         "initialize",
@@ -337,6 +372,14 @@ def test_description_endpoints(client):
 @pytest.mark.parametrize("transport", ["rest", "mcp"])
 def test_complete_vault_workflow(client, transport):
     exercised = set()
+    if transport == "rest":
+        paths = client.get("/openapi.json", headers=auth()).json()["paths"]
+        rest_scopes = {
+            operation["operationId"]: operation["x-required-scope"]
+            for path, methods in paths.items()
+            if path.startswith("/v1/")
+            for operation in methods.values()
+        }
 
     def call(tool, method, route, *, args=None, body=None, status=200):
         exercised.add(tool)
@@ -350,7 +393,9 @@ def test_complete_vault_workflow(client, transport):
             if tool in {"list_groups", "list_entry_attachments"}:
                 return data["result"]
             return data
-        response = client.request(method, route, json=body, headers=auth())
+        response = client.request(
+            method, route, json=body, headers=auth(f"{TOKEN}-{rest_scopes[tool]}")
+        )
         assert response.status_code == status, response.text
         assert response.headers["Cache-Control"] == "no-store"
         assert response.headers["X-Content-Type-Options"] == "nosniff"
@@ -517,13 +562,7 @@ def test_complete_vault_workflow(client, transport):
         tools = mcp_request(client, "tools/list")["tools"]
         assert exercised == {tool["name"] for tool in tools}
     else:
-        paths = client.get("/openapi.json", headers=auth()).json()["paths"]
-        assert exercised == {
-            operation["operationId"]
-            for path, methods in paths.items()
-            if path.startswith("/v1/")
-            for operation in methods.values()
-        }
+        assert exercised == rest_scopes.keys()
 
 
 def assert_error(response, status, code):

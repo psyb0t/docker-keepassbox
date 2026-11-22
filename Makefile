@@ -2,9 +2,11 @@ IMAGE ?= psyb0t/keepassbox:local
 DEV_IMAGE ?= keepassbox-dev:local
 LOCK_IMAGE := keepassbox-lock:local
 DOCS_IMAGE := ghcr.io/actions/jekyll-build-pages:v1.0.13@sha256:6791ebfd912185ed59bfb5fb102664fa872496b79f87ff8b9cfba292a7345041
+OPENAPI_IMAGE := openapitools/openapi-generator-cli:v7.27.0@sha256:949efd0d5cf3c093ef169887b2ebe0879ee2e8074b6476264232ce4fd8ef46d0
+OPENAPI_DOCUMENT := docs/reference/openapi.json
 DEV_RUN := docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges $(DEV_IMAGE)
 
-.PHONY: build dev-image pkg-lock lint format test test-unit test-integration sec docs-build help
+.PHONY: build dev-image pkg-lock lint format test test-unit test-integration sec generate-docs docs-build help
 build: ## Build the release image
 	docker build --target runtime -t $(IMAGE) .
 
@@ -34,7 +36,19 @@ test-integration: dev-image ## Exercise REST and MCP against real KDBX files
 sec: dev-image ## Gate on source security findings and write SARIF
 	$(DEV_RUN) ruff check --no-cache --select S --output-format sarif src > sec.sarif
 
-docs-build: ## Build GitHub Pages locally
+generate-docs: dev-image ## Export and validate the public OpenAPI document
+	@mkdir -p .testing
+	@set -eu; \
+		spec="$$(mktemp "$(CURDIR)/.testing/openapi.XXXXXX.json")"; \
+		trap 'rm -f -- "$$spec"' EXIT; \
+		$(DEV_RUN) python -c 'import json; from pathlib import Path; from keepassbox.config import Access, Config; from keepassbox.server import create_app; app = create_app(Config(Path("/tmp"), Access.model_construct(clients=[]))); print(json.dumps(app.openapi(), indent=2))' > "$$spec"; \
+		docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+			--user "$$(id -u):$$(id -g)" -v "$$spec:/openapi.json:ro" \
+			$(OPENAPI_IMAGE) validate -i /openapi.json; \
+		chmod 0644 "$$spec"; \
+		mv "$$spec" $(OPENAPI_DOCUMENT)
+
+docs-build: generate-docs ## Build GitHub Pages locally
 	docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp \
 		-e GITHUB_WORKSPACE=/work -e GITHUB_REPOSITORY=psyb0t/docker-keepassbox \
 		-e INPUT_SOURCE=docs -e INPUT_DESTINATION=.testing/docs-site -e INPUT_VERBOSE=false \
