@@ -7,7 +7,7 @@
   },
   "homepage": "https://github.com/psyb0t/docker-keepassbox",
   "license": "GPL-3.0-only",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "repository": "https://github.com/psyb0t/docker-keepassbox",
   "skills": "./skills/"
 }

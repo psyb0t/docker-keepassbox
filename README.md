@@ -28,7 +28,7 @@ keepassbox start
 
 If your shell can't find the command, run `~/.local/bin/keepassbox start`. Run `keepassbox token` to get the installer-generated bearer token. It can manage its owner's vaults, read passwords, and generate TOTP codes. REST is at `http://localhost:8000/v1`, and MCP is at `http://localhost:8000/mcp`.
 
-The installer puts the Compose files and vaults in `~/.config/keepassbox/` by default and uses the published `psyb0t/keepassbox:latest` image. See the [install guide](https://psyb0t.github.io/docker-keepassbox/install/) to pin a version, change the port, or upgrade.
+The installer puts the Compose files and vaults in `~/.config/keepassbox/` by default and uses the published `psyb0t/keepassbox:latest` image. See the [install guide](https://psyb0t.github.io/docker-keepassbox/install/) to pin a version, change the port, or upgrade. Enable the [Tailscale sidecar](https://psyb0t.github.io/docker-keepassbox/install/#tailscale-access) for private HTTPS access over your tailnet.
 
 ## What it does
 

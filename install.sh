@@ -28,13 +28,14 @@ trap 'log ERROR "KeePassBox command failed at line $LINENO"' ERR
 usage() {
 	printf '%s\n' \
 		'Usage: bash install.sh [--version latest|vX.Y.Z] [--port PORT]' \
-		'       keepassbox start|stop|status|logs|token|config|uninstall' \
+		'       keepassbox start|stop|status|token|config|uninstall' \
+		'       keepassbox logs [tailscale]' \
 		'       keepassbox upgrade [--version latest|vX.Y.Z]'
 }
 
 validate_tag() {
 	[[ "$1" == latest || "$1" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
-		fail 'Use latest or a version such as v0.1.1.'
+		fail 'Use latest or a version such as v0.2.0.'
 }
 
 validate_port() {
@@ -55,6 +56,8 @@ set_paths() {
 	[[ ! -L "$config" && ! -L "$bin_dir" ]] || fail 'Install paths must be real directories.'
 	launcher="$bin_dir/keepassbox"
 	manifest="$config/compose.yaml"
+	tailscale_manifest="$config/compose.tailscale.yaml"
+	tailscale_config="$config/tailscale"
 	environment="$config/.env"
 	access="$config/access.local.json"
 	project_hash="$(printf '%s' "$config" | sha256sum)"
@@ -63,12 +66,15 @@ set_paths() {
 
 verify_paths() {
 	local path
-	for path in "$manifest" "$environment" "$access" "$config/data"; do
+	for path in "$manifest" "$tailscale_manifest" "$tailscale_config" "$tailscale_config/serve.json" \
+		"$environment" "$access" "$config/data"; do
 		[[ ! -L "$path" ]] || fail "Refusing symlink at $path."
 	done
-	if [[ -e "$manifest" ]]; then
-		grep -Fxq -- "$compose_marker" "$manifest" || fail "Unmanaged Compose file: $manifest"
-	fi
+	for path in "$manifest" "$tailscale_manifest"; do
+		if [[ -e "$path" ]]; then
+			grep -Fxq -- "$compose_marker" "$path" || fail "Unmanaged Compose file: $path"
+		fi
+	done
 	if [[ -e "$launcher" || -L "$launcher" ]]; then
 		if [[ -L "$launcher" ]] || ! grep -Fxq -- "$command_marker" "$launcher"; then
 			fail "Unmanaged command: $launcher"
@@ -86,8 +92,12 @@ setting() {
 
 write_environment() {
 	temporary="$(mktemp "$config/.env.XXXXXX")"
+	if [[ -f "$environment" ]]; then
+		awk '!/^[[:space:]]*(export[[:space:]]+)?KEEPASSBOX_(IMAGE_TAG|PORT|UID|GID)[[:space:]]*=/' \
+			"$environment" >"$temporary"
+	fi
 	printf 'KEEPASSBOX_IMAGE_TAG=%s\nKEEPASSBOX_PORT=%s\nKEEPASSBOX_UID=%s\nKEEPASSBOX_GID=%s\n' \
-		"$1" "$2" "$(id -u)" "$(id -g)" >"$temporary"
+		"$1" "$2" "$(id -u)" "$(id -g)" >>"$temporary"
 	mv -T -- "$temporary" "$environment"
 	temporary=''
 }
@@ -159,6 +169,77 @@ EOF
 	temporary=''
 }
 
+write_tailscale() {
+	install -d -m 0755 -- "$tailscale_config"
+	temporary="$(mktemp "$tailscale_config/.serve.XXXXXX")"
+	cat >"$temporary" <<'JSON'
+{
+  "TCP": {
+    "443": {"HTTPS": true}
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": {
+      "Handlers": {
+        "/": {"Proxy": "http://127.0.0.1:8000"}
+      }
+    }
+  }
+}
+JSON
+	chmod 0644 -- "$temporary"
+	mv -T -- "$temporary" "$tailscale_config/serve.json"
+	temporary="$(mktemp "$config/.compose-tailscale.XXXXXX")"
+	printf '%s\n' "$compose_marker" >"$temporary"
+	cat >>"$temporary" <<'YAML'
+services:
+  tailscale:
+    image: tailscale/tailscale:v1.102.5@sha256:c507f3a2a6ab1cabd8d809b98edeb41edbd5c3fb6ad9632ffd098b4c7d0b4065
+    profiles: [tailscale]
+    network_mode: service:keepassbox
+    depends_on:
+      keepassbox:
+        condition: service_healthy
+        restart: true
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/run:rw,noexec,nosuid,size=8m
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    environment:
+      TS_AUTHKEY: "${KEEPASSBOX_TAILSCALE_AUTHKEY:-}"
+      TS_HOSTNAME: "${KEEPASSBOX_TAILSCALE_HOSTNAME:-keepassbox}"
+      TS_AUTH_ONCE: "true"
+      TS_USERSPACE: "true"
+      TS_EXTRA_ARGS: --accept-dns=false
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - type: bind
+        source: ./tailscale
+        target: /config
+        read_only: true
+        bind:
+          create_host_path: false
+
+volumes:
+  tailscale-state:
+YAML
+	mv -T -- "$temporary" "$tailscale_manifest"
+	temporary=''
+}
+
 install_launcher() {
 	temporary="$(mktemp "$bin_dir/.keepassbox.XXXXXX")"
 	if [[ -f "${BASH_SOURCE[0]:-}" ]]; then
@@ -174,8 +255,12 @@ install_launcher() {
 }
 
 compose() {
+	local files=(-f "$manifest")
+	if [[ -f "$tailscale_manifest" ]]; then
+		files+=(-f "$tailscale_manifest")
+	fi
 	docker compose --project-directory "$config" --project-name "$project" \
-		--env-file "$environment" -f "$manifest" "$@"
+		--env-file "$environment" "${files[@]}" "$@"
 }
 
 install_stack() {
@@ -211,12 +296,32 @@ install_stack() {
 	if [[ ! -f "$manifest" ]]; then
 		write_compose
 	fi
+	write_tailscale
 	write_environment "$tag" "$port"
-	compose config --quiet || fail 'Compose configuration validation failed.'
+	compose --profile tailscale config --quiet || fail 'Compose configuration validation failed.'
 	install_launcher
 	log INFO "Installed $launcher"
 	log INFO "Run keepassbox start. API: http://localhost:$port"
 	log INFO "Read the token with keepassbox token."
+}
+
+start_stack() {
+	local enabled existing
+	enabled="$(compose config --environment | awk -F= '$1 == "KEEPASSBOX_TAILSCALE_ENABLED" {print $2}')" ||
+		fail 'Could not read the Compose environment.'
+	case "$enabled" in
+	true) compose --profile tailscale up -d --wait keepassbox tailscale ;;
+	false | '')
+		if [[ -f "$tailscale_manifest" ]]; then
+			existing="$(compose --profile tailscale ps -aq tailscale)" || return
+			if [[ -n "$existing" ]]; then
+				compose --profile tailscale rm -s -f tailscale || return
+			fi
+		fi
+		compose up -d --wait keepassbox
+		;;
+	*) fail 'KEEPASSBOX_TAILSCALE_ENABLED must be true or false.' ;;
+	esac
 }
 
 upgrade_stack() {
@@ -230,7 +335,7 @@ upgrade_stack() {
 	validate_tag "$tag"
 	validate_port "$port"
 	KEEPASSBOX_IMAGE_TAG="$tag" compose pull keepassbox || fail 'Image pull failed.'
-	KEEPASSBOX_IMAGE_TAG="$tag" compose up -d --wait keepassbox || fail 'Upgrade did not become healthy.'
+	KEEPASSBOX_IMAGE_TAG="$tag" start_stack || fail 'Upgrade did not become healthy.'
 	umask 077
 	write_environment "$tag" "$port"
 }
@@ -243,6 +348,11 @@ manage() {
 	if [[ "$action" == upgrade ]]; then
 		require_docker
 		upgrade_stack "$@"
+		return
+	fi
+	if [[ "$action" == logs && "$#" == 1 && "$1" == tailscale ]]; then
+		require_docker
+		compose --profile tailscale logs -f tailscale
 		return
 	fi
 	(($# == 0)) || fail "Unexpected arguments for $action."
@@ -258,12 +368,12 @@ manage() {
 	esac
 	require_docker
 	case "$action" in
-	start) compose up -d --wait keepassbox ;;
-	stop) compose stop keepassbox ;;
-	status) compose ps keepassbox ;;
+	start) start_stack ;;
+	stop) compose --profile tailscale stop ;;
+	status) compose --profile tailscale ps ;;
 	logs) compose logs -f keepassbox ;;
 	uninstall)
-		compose down || fail 'Could not remove the KeePassBox stack.'
+		compose --profile tailscale down || fail 'Could not remove the KeePassBox stack.'
 		if [[ -f "$launcher" ]]; then
 			rm -- "$launcher"
 		fi

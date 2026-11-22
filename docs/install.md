@@ -22,11 +22,27 @@ The host listens on `127.0.0.1:8000`. If that port is taken or you want a pinned
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/psyb0t/docker-keepassbox/main/install.sh \
-  | bash -s -- --port 8010 --version v0.1.1
+  | bash -s -- --port 8010 --version v0.2.0
 keepassbox start
 ```
 
 Use `keepassbox status` or `keepassbox logs` to check it. Use `keepassbox stop` to stop it. `keepassbox upgrade` pulls the configured tag and brings the service back up. Run `keepassbox upgrade --version latest` to follow the latest image again, or pass a specific release tag. `keepassbox uninstall` removes the container and command while keeping the vaults and access settings so you can reinstall.
+
+### Tailscale access
+
+The installer can run a [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve) sidecar for private HTTPS access from your tailnet. If KeePassBox is already installed, rerun the installer above to update the command and add the sidecar configuration.
+
+Edit `$(keepassbox config)/.env` and add these settings:
+
+```dotenv
+KEEPASSBOX_TAILSCALE_ENABLED=true
+KEEPASSBOX_TAILSCALE_HOSTNAME=keepassbox
+# KEEPASSBOX_TAILSCALE_AUTHKEY=REPLACE_ME
+```
+
+Enable MagicDNS and HTTPS certificates in your tailnet, then run `keepassbox start`. If you left the auth key unset, run `keepassbox logs tailscale` and follow the login URL. Use the device's full HTTPS name from Tailscale for your API base URL and append `/mcp` for MCP. Both still require the KeePassBox bearer token.
+
+To disable the sidecar, set `KEEPASSBOX_TAILSCALE_ENABLED=false` and run `keepassbox start` again. Local access stays on loopback. The sidecar's login state survives disabling, upgrades, and uninstall so it can reconnect later.
 
 ## Manage Docker yourself
 
@@ -63,7 +79,7 @@ For an installer-managed setup, edit `$(keepassbox config)/access.local.json`. K
 }
 ```
 
-Generate a different token for each new client with `openssl rand -hex 32`. Use a different `owner` when clients should have separate vaults. The example works with `v0.1.1`. For builds that support omitting `scopes`, see [scope defaults](api.md#access).
+Generate a different token for each new client with `openssl rand -hex 32`. Use a different `owner` when clients should have separate vaults. The example works with `v0.1.1` and later. See [scope defaults](api.md#access) for when you can omit the list.
 
 Restart the installer-managed service after saving the file:
 
