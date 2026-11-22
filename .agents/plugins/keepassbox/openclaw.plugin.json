@@ -35,18 +35,14 @@
   },
   "configSchema": {
     "type": "object",
-    "required": [
-      "url",
-      "token"
-    ],
     "properties": {
       "url": {
         "type": "string",
-        "description": "Trusted KeePassBox base URL."
+        "description": "Legacy setting. Use KEEPASSBOX_URL in the gateway environment."
       },
       "token": {
         "type": "string",
-        "description": "Scoped bearer token."
+        "description": "Legacy setting. Use KEEPASSBOX_TOKEN in the gateway environment."
       }
     }
   }

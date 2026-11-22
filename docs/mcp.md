@@ -6,17 +6,17 @@ nav_order: 4
 
 # MCP
 
-Point your client at `http://localhost:8000/mcp` with the bearer token from `keepassbox token`. It grants full access to the installer's owner, including password retrieval and TOTP. For custom tokens, see [access settings](api.md#access). Use HTTPS for a remote instance.
+Use the base URL from `keepassbox url` for a local instance or the HTTPS URL for a remote instance. Append `/mcp` for a Streamable HTTP client. Use the bearer token from `keepassbox token` on a default install. For custom clients, use the token assigned in the [access file](install.md#access-file-example).
 
 ## Connect a client
 
 For Codex, export the token before starting Codex:
 
 ```bash
-export KEEPASSBOX_TOKEN="$(keepassbox token)"
+export KEEPASSBOX_TOKEN="${KEEPASSBOX_TOKEN:-$(keepassbox token)}"
 ```
 
-Add the server to your Codex configuration:
+Add the server to `~/.codex/config.toml`. Replace the URL if you chose a different port or use remote HTTPS:
 
 ```toml
 [mcp_servers.keepassbox]
@@ -32,11 +32,12 @@ Call `tools/list` to see the tool names and inputs. Tools mirror the [REST opera
 
 Use `reveal_entry_field` with `vault`, `entry`, and `field: "password"` to read an entry's password, or `generate_entry_totp` with `vault` and `entry` to get a code. The installer token can call both tools.
 
-List vaults as your token's owner from Bash:
+List vaults as your token's owner from Bash. If you manage Docker yourself or use a remote instance, set `KEEPASSBOX_URL` and `KEEPASSBOX_TOKEN` before running this example.
 
 ```bash
-token=$(keepassbox token)
-curl -fsS http://127.0.0.1:8000/mcp \
+base="${KEEPASSBOX_URL:-$(keepassbox url)}"
+token="${KEEPASSBOX_TOKEN:-$(keepassbox token)}"
+curl -fsS "${base%/}/mcp" \
   --header @<(printf 'Authorization: Bearer %s\n' "$token") \
   --header 'Accept: application/json, text/event-stream' \
   --json '{
@@ -50,14 +51,18 @@ curl -fsS http://127.0.0.1:8000/mcp \
   }'
 ```
 
-The result contains `items` and `total` under `result.structuredContent`. An empty list means the owner has no vaults. To create an entry, call `create_entry` with arguments such as these. The vault must exist and be unlocked.
+For an event-stream response, read the JSON on the `data:` line. A successful list returns `items` and `total` under `result.structuredContent`. Missing or rejected bearer tokens return HTTP 401. A tool can return `result.isError: true` in an HTTP 200 response.
+
+To create an entry, replace `VAULT_ID_FROM_LIST` with an unlocked vault's ID from that response. If the list is empty, create one with the [REST walkthrough](api.md#try-it-with-curl).
 
 ```json
 {
-  "vault": "demo",
+  "vault": "VAULT_ID_FROM_LIST",
   "body": {
     "title": "Demo account",
     "username": "demo@example.invalid"
   }
 }
 ```
+
+Use a native or server-side client. The server rejects requests carrying an `Origin` header and applies the [REST request body limit](api.md#endpoint-reference) to MCP. The MCP Registry entry helps clients discover KeePassBox. A self-hosted instance still needs the [installation and access configuration](install.md).

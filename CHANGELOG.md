@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+- Publish full REST paths with mobile-friendly tables and add bearer auth, response schemas, and error envelopes to OpenAPI.
+- Fix the OpenClaw manifest so the bridge can use environment variables without duplicate plugin configuration.
+- Read tokens from valid JSON and require explicit selection when multiple clients are configured. Add `keepassbox url` for the configured local port.
+- Clarify runtime configuration, MCP examples, credential replacement, and encrypted backup recovery.
+
+Rerun the installer to update the command. Install jq for `keepassbox token`. If the access file has multiple clients, use `--owner` for a unique owner or use the intended client's token directly.
+
 ## 0.2.0
 
 - Add an opt-in Tailscale Serve sidecar to the installer for private HTTPS access to REST and MCP.

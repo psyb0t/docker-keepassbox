@@ -26,11 +26,11 @@ Owners isolate storage and unlocked state. Tokens assigned to the same owner sha
 
 ## Try it with curl
 
-[Start KeePassBox](install.md), then run these examples in Bash with `curl`, `jq`, and `openssl`. They create a fresh demo vault with sample credentials. Run them against a test instance.
+[Start KeePassBox](install.md), then run these examples against a test instance in one Bash session with curl 7.82 or newer, jq, and OpenSSL. They create a demo vault with sample credentials. For a remote instance, set `KEEPASSBOX_URL` to its HTTPS base URL first. For a custom client, set `KEEPASSBOX_TOKEN` to its assigned token.
 
 ```bash
-base=http://127.0.0.1:8000
-token=$(keepassbox token)
+base="${KEEPASSBOX_URL:-$(keepassbox url)}"
+token="${KEEPASSBOX_TOKEN:-$(keepassbox token)}"
 vault="demo-$(openssl rand -hex 4)"
 
 kb() {
@@ -82,6 +82,7 @@ Send JSON bodies with `Content-Type: application/json`. POST, PUT, and PATCH req
 | `GET /healthz` | Public | 200, `{"ok":true}` |
 | `GET /version` | Public | 200, `name` and `version` |
 | `GET /openapi.json` | Any valid token | 200, OpenAPI schema |
+{: .api-endpoints }
 
 Save the live OpenAPI schema with `kb "$base/openapi.json" > keepassbox-openapi.json` after defining `kb` above.
 
@@ -91,19 +92,20 @@ Vault and entry listings return `items` and the matching `total` before paginati
 
 ### Vaults
 
-The paths below start at `/v1/vaults`. For example, `POST /{vault}/unlock` expands to `POST /v1/vaults/{vault}/unlock`.
+Replace `{vault}` with the vault ID. To unlock a vault with ID `demo`, send `POST /v1/vaults/demo/unlock`.
 
 | Method and path | Request | Success | Scope |
 | --- | --- | --- | --- |
-| `GET /` | Query `limit`, `offset` | 200, page of `id` and `unlocked` | `entries:read` |
-| `POST /` | `id`, `name`, `credentials`, optional `security` | 201, vault details | `vaults:create` |
-| `GET /{vault}` | No body | 200, vault details | `entries:read` |
-| `POST /{vault}/unlock` | Credentials object | 200, vault details | `entries:read` |
-| `POST /{vault}/lock` | Empty body | 200, `id` and `unlocked: false` | `entries:read` |
-| `PATCH /{vault}/security` | `revision` and `security` | 200, updated vault details | `vaults:admin` |
-| `POST /{vault}/rekey` | `revision` and new `credentials` | 200, updated vault details | `vaults:admin` |
+| `GET /v1/vaults` | Query `limit`, `offset` | 200, page of `id` and `unlocked` | `entries:read` |
+| `POST /v1/vaults` | `id`, `name`, `credentials`, optional `security` | 201, vault details | `vaults:create` |
+| `GET /v1/vaults/{vault}` | No body | 200, vault details | `entries:read` |
+| `POST /v1/vaults/{vault}/unlock` | Credentials object | 200, vault details | `entries:read` |
+| `POST /v1/vaults/{vault}/lock` | Empty body | 200, `id` and `unlocked: false` | `entries:read` |
+| `PATCH /v1/vaults/{vault}/security` | `revision` and `security` | 200, updated vault details | `vaults:admin` |
+| `POST /v1/vaults/{vault}/rekey` | `revision` and new `credentials` | 200, updated vault details | `vaults:admin` |
+{: .api-endpoints }
 
-In these tables, `/` means the base path itself, such as `/v1/vaults`. Vault details have `id`, `name`, `format`, `revision`, `unlocked`, and `security`. Creating a vault unlocks it. A lock clears the owner's cached unlock state for that vault. Vault details, edits, and entry operations need an unlocked vault.
+Vault details have `id`, `name`, `format`, `revision`, `unlocked`, and `security`. Creating a vault unlocks it. A lock clears the owner's cached unlock state for that vault. Vault details, edits, and entry operations need an unlocked vault.
 
 ### Credentials and encryption
 
@@ -142,21 +144,20 @@ jq -n --arg revision "$revision" '{
 }' | kb -X PATCH --json @- "$base/v1/vaults/$vault/security"
 ```
 
-To change credentials, fetch a fresh revision and send it with `credentials` to `POST /v1/vaults/{vault}/rekey`. Keep the old credentials if you need to open the [previous encrypted revision](install.md#vault-files-and-backups).
+To change credentials, fetch a fresh revision and send it with `credentials` to `POST /v1/vaults/{vault}/rekey`. Rekey replaces the entire credential set. Send the current password or key alias again if you want to keep that factor. The [previous encrypted revision](install.md#vault-files-and-backups) requires its old credentials.
 
 ### Entries and groups
 
-The paths below start at `/v1/vaults/{vault}`.
-
 | Method and path | Request | Success | Scope |
 | --- | --- | --- | --- |
-| `GET /groups` | No body | 200, array of groups | `entries:read` |
-| `POST /groups` | `name`, optional `parentId` | 201, group | `entries:write` |
-| `GET /entries` | Query `q`, `limit`, `offset` | 200, page of entry metadata | `entries:read` |
-| `POST /entries` | `title` and optional entry fields | 201, entry metadata | `entries:write` |
-| `GET /entries/{entry}` | No body | 200, entry metadata | `entries:read` |
-| `PATCH /entries/{entry}` | Fields to update | 200, entry metadata | `entries:write` |
-| `DELETE /entries/{entry}` | No body | 200, `id` and `trashed: true` | `entries:write` |
+| `GET /v1/vaults/{vault}/groups` | No body | 200, array of groups | `entries:read` |
+| `POST /v1/vaults/{vault}/groups` | `name`, optional `parentId` | 201, group | `entries:write` |
+| `GET /v1/vaults/{vault}/entries` | Query `q`, `limit`, `offset` | 200, page of entry metadata | `entries:read` |
+| `POST /v1/vaults/{vault}/entries` | `title` and optional entry fields | 201, entry metadata | `entries:write` |
+| `GET /v1/vaults/{vault}/entries/{entry}` | No body | 200, entry metadata | `entries:read` |
+| `PATCH /v1/vaults/{vault}/entries/{entry}` | Fields to update | 200, entry metadata | `entries:write` |
+| `DELETE /v1/vaults/{vault}/entries/{entry}` | No body | 200, `id` and `trashed: true` | `entries:write` |
+{: .api-endpoints }
 
 A group has `id`, `name`, and `parentId`. Omit `parentId` when creating a group under the root. Entry fields are `title`, `groupId`, `username`, `password`, `url`, `notes`, and `tags`. Omit `groupId` to create the entry in the root. On PATCH, fields left out or set to `null` keep their previous values. To move an entry, supply the destination group's UUID. Use an empty string to clear an optional text field or an empty array to clear tags.
 
@@ -164,18 +165,17 @@ Entry metadata contains `id`, `title`, `username`, `url`, `tags`, `groupId`, and
 
 ### Secrets, TOTP, and attachments
 
-The paths below start at `/v1/vaults/{vault}/entries/{entry}`.
-
 | Method and path | Request | Success | Scope |
 | --- | --- | --- | --- |
-| `POST /reveal` | Query `field=password` or `field=notes`; empty body | 200, `value` | `secrets:read` |
-| `PUT /totp` | `value` with a Base32 seed or `otpauth://totp/` URI | 200, `id` and `hasTotp: true` | `entries:write` |
-| `POST /totp/code` | Empty body | 200, `code` and `expiresAt` in Unix seconds | `secrets:read` |
-| `PUT /fields/{name}` | `value` | 200, `name` | `entries:write` |
-| `POST /fields/{name}/reveal` | Empty body | 200, `value` | `secrets:read` |
-| `GET /attachments` | No body | 200, array of `index` and `name` | `entries:read` |
-| `POST /attachments` | `name` and `contentBase64` | 201, `name` | `entries:write` |
-| `GET /attachments/{index}` | Zero-based `index` from the attachment list | 200, `name` and `contentBase64` | `secrets:read` |
+| `POST /v1/vaults/{vault}/entries/{entry}/reveal` | Query `field=password` or `field=notes`; empty body | 200, `value` | `secrets:read` |
+| `PUT /v1/vaults/{vault}/entries/{entry}/totp` | `value` with a Base32 seed or `otpauth://totp/` URI | 200, `id` and `hasTotp: true` | `entries:write` |
+| `POST /v1/vaults/{vault}/entries/{entry}/totp/code` | Empty body | 200, `code` and `expiresAt` in Unix seconds | `secrets:read` |
+| `PUT /v1/vaults/{vault}/entries/{entry}/fields/{name}` | `value` | 200, `name` | `entries:write` |
+| `POST /v1/vaults/{vault}/entries/{entry}/fields/{name}/reveal` | Empty body | 200, `value` | `secrets:read` |
+| `GET /v1/vaults/{vault}/entries/{entry}/attachments` | No body | 200, array of `index` and `name` | `entries:read` |
+| `POST /v1/vaults/{vault}/entries/{entry}/attachments` | `name` and `contentBase64` | 201, `name` | `entries:write` |
+| `GET /v1/vaults/{vault}/entries/{entry}/attachments/{index}` | Zero-based `index` from the attachment list | 200, `name` and `contentBase64` | `secrets:read` |
+{: .api-endpoints }
 
 TOTP returns the code as a string so leading zeroes survive. Regular entry reads exclude passwords, notes, OTP seeds, protected field values, and attachment contents. Custom fields are stored with a `custom:` prefix in KDBX. Inline attachment transfers accept up to 32 KiB of decoded content.
 
@@ -191,15 +191,20 @@ Use KeePassXC for desktop integrations, hardware unlock, merge and sync, format 
 
 ## Errors
 
-API errors return a JSON object with `code`, `message`, and `details`. Use the code to decide what to do.
+KeePassBox application errors return `code`, `message`, and `details`. Use the code to decide what to do.
 
 | HTTP | Example code | What to check |
 | --- | --- | --- |
 | 401 | `UNAUTHORIZED` | Check the bearer token. |
 | 403 | `FORBIDDEN` | Check the token's scopes. |
+| 403 | `INVALID_CREDENTIALS` | Check the vault password and key file. |
 | 404 | `VAULT_NOT_FOUND` | Check the vault ID and the token's owner. |
 | 409 | `VAULT_CONFLICT` | Fetch a fresh revision. If another client wrote to the file directly, reopen the vault first. |
+| 409 | `VAULT_EXISTS` | Choose an unused vault ID. |
+| 409 | `FORMAT_REQUIRED` | Cipher and KDF changes require KDBX 4. |
 | 413 | `BODY_LIMIT` | Send a body at most 64 KiB with `Content-Length`. |
 | 422 | `INVALID_REQUEST` | Check the request against the OpenAPI schema. |
 | 423 | `VAULT_LOCKED` | Unlock the vault and retry. |
 | 503 | `STORE_UNAVAILABLE` | Check the data directory, permissions, and free space. |
+
+Use a native or server-side HTTP client. Protected routes reject requests that carry an `Origin` header. Fetch the schema with the bearer header rather than opening `/docs` in an ordinary browser tab.

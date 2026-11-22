@@ -7,13 +7,15 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
+from . import responses
 from .config import Client, Config
 from .errors import Problem
 from .models import (
@@ -39,6 +41,17 @@ Offset = Annotated[int, Field(ge=0, le=100_000)]
 Search = Annotated[str, Field(max_length=256)]
 Index = Annotated[int, Field(ge=0, le=100_000)]
 PROJECT_FILE = Path(__file__).resolve().parents[2] / "pyproject.toml"
+REST_BEARER = HTTPBearer(auto_error=False)
+REST_ERRORS = {
+    401: {"model": responses.ProblemResponse, "description": "Bearer token required"},
+    403: {"model": responses.ProblemResponse, "description": "Request forbidden"},
+    404: {"model": responses.ProblemResponse, "description": "Resource not found"},
+    409: {"model": responses.ProblemResponse, "description": "Vault conflict"},
+    413: {"model": responses.ProblemResponse, "description": "Invalid or oversized body"},
+    422: {"model": responses.ProblemResponse, "description": "Invalid request or vault"},
+    423: {"model": responses.ProblemResponse, "description": "Vault locked"},
+    503: {"model": responses.ProblemResponse, "description": "Storage unavailable"},
+}
 
 
 def failure(code: str, message: str, status: int, headers=None):
@@ -130,22 +143,28 @@ def create_app(config: Config | None = None):
     async def storage_error(_request, _error):
         return failure("STORE_UNAVAILABLE", "Vault storage is unavailable", 503)
 
-    @app.get("/healthz")
+    @app.get("/healthz", response_model=responses.Health)
     async def health():
         return {"ok": True}
 
-    @app.get("/version")
+    @app.get("/version", response_model=responses.Version)
     async def version_info():
         return {"name": "keepassbox", "version": version}
 
-    def expose(method: str, path: str, status: int = 200):
+    def expose(method: str, path: str, response_model, status: int = 200, *, errors=()):
         def decorate(operation):
+            statuses = (401, 403, 422, 503, *errors)
+            if method in {"POST", "PUT", "PATCH"}:
+                statuses += (413,)
             app.add_api_route(
                 path,
                 operation,
                 methods=[method],
                 status_code=status,
                 operation_id=operation.__name__,
+                response_model=response_model,
+                responses={code: REST_ERRORS[code] for code in statuses},
+                dependencies=[Depends(REST_BEARER)],
             )
 
             @wraps(operation)
@@ -162,118 +181,176 @@ def create_app(config: Config | None = None):
 
         return decorate
 
-    @expose("GET", "/v1/vaults")
+    @expose("GET", "/v1/vaults", responses.Page[responses.VaultState])
     def list_vaults(limit: Limit = 50, offset: Offset = 0) -> dict:
         """List vaults visible to this client."""
         return store.list_vaults(ACTOR.get(), limit, offset)
 
-    @expose("POST", "/v1/vaults", 201)
+    @expose("POST", "/v1/vaults", responses.VaultDetails, 201, errors=(404, 409))
     def create_vault(body: VaultCreate) -> dict:
         """Create and unlock a new KDBX vault with the specified security settings."""
         return store.create(ACTOR.get(), body)
 
-    @expose("GET", "/v1/vaults/{vault}")
+    @expose("GET", "/v1/vaults/{vault}", responses.VaultDetails, errors=(404, 423))
     def get_vault(vault: Slug) -> dict:
         """Return an unlocked vault's format, revision and cryptographic settings."""
         return store.get(ACTOR.get(), vault)
 
-    @expose("POST", "/v1/vaults/{vault}/unlock")
+    @expose("POST", "/v1/vaults/{vault}/unlock", responses.VaultDetails, errors=(404,))
     def unlock_vault(vault: Slug, body: Credentials) -> dict:
         """Unlock a vault with its password or operator-provisioned key-file alias."""
         return store.unlock(ACTOR.get(), vault, body)
 
-    @expose("POST", "/v1/vaults/{vault}/lock")
+    @expose("POST", "/v1/vaults/{vault}/lock", responses.VaultState)
     def lock_vault(vault: Slug) -> dict:
         """Remove the vault and unlock credentials from the active cache."""
         return store.lock_vault(ACTOR.get(), vault)
 
-    @expose("PATCH", "/v1/vaults/{vault}/security")
+    @expose("PATCH", "/v1/vaults/{vault}/security", responses.VaultDetails, errors=(404, 409, 423))
     def update_vault_security(vault: Slug, body: SecurityChange) -> dict:
         """Change cipher, KDF and compression on an existing KDBX 4 vault."""
         return store.security(ACTOR.get(), vault, body)
 
-    @expose("POST", "/v1/vaults/{vault}/rekey")
+    @expose("POST", "/v1/vaults/{vault}/rekey", responses.VaultDetails, errors=(404, 409, 423))
     def rekey_vault(vault: Slug, body: Rekey) -> dict:
         """Replace the vault's password, key file, or both."""
         return store.rekey(ACTOR.get(), vault, body)
 
-    @expose("GET", "/v1/vaults/{vault}/groups")
+    @expose("GET", "/v1/vaults/{vault}/groups", list[responses.Group], errors=(404, 423))
     def list_groups(vault: Slug) -> list[dict]:
         """List groups and their parent IDs."""
         return store.groups(ACTOR.get(), vault)
 
-    @expose("POST", "/v1/vaults/{vault}/groups", 201)
+    @expose("POST", "/v1/vaults/{vault}/groups", responses.Group, 201, errors=(404, 409, 423))
     def create_group(vault: Slug, body: GroupCreate) -> dict:
         """Create a group beneath the requested parent, or beneath the root."""
         return store.add_group(ACTOR.get(), vault, body)
 
-    @expose("GET", "/v1/vaults/{vault}/entries")
+    @expose(
+        "GET",
+        "/v1/vaults/{vault}/entries",
+        responses.Page[responses.EntryMetadata],
+        errors=(404, 423),
+    )
     def list_entries(vault: Slug, q: Search = "", limit: Limit = 50, offset: Offset = 0) -> dict:
         """List metadata, with optional text filtering by title, username and tags."""
         return store.entries(ACTOR.get(), vault, q, limit, offset)
 
-    @expose("GET", "/v1/vaults/{vault}/entries/{entry}")
+    @expose("GET", "/v1/vaults/{vault}/entries/{entry}", responses.EntryMetadata, errors=(404, 423))
     def get_entry(vault: Slug, entry: UUID) -> dict:
         """Read an entry's metadata."""
         return store.get_entry(ACTOR.get(), vault, entry)
 
-    @expose("POST", "/v1/vaults/{vault}/entries", 201)
+    @expose(
+        "POST", "/v1/vaults/{vault}/entries", responses.EntryMetadata, 201, errors=(404, 409, 423)
+    )
     def create_entry(vault: Slug, body: EntryCreate) -> dict:
         """Create an entry and persist it in the vault."""
         return store.add_entry(ACTOR.get(), vault, body)
 
-    @expose("PATCH", "/v1/vaults/{vault}/entries/{entry}")
+    @expose(
+        "PATCH",
+        "/v1/vaults/{vault}/entries/{entry}",
+        responses.EntryMetadata,
+        errors=(404, 409, 423),
+    )
     def update_entry(vault: Slug, entry: UUID, body: EntryUpdate) -> dict:
         """Update or move an entry, preserving its previous version in history."""
         return store.update_entry(ACTOR.get(), vault, entry, body)
 
-    @expose("DELETE", "/v1/vaults/{vault}/entries/{entry}")
+    @expose(
+        "DELETE",
+        "/v1/vaults/{vault}/entries/{entry}",
+        responses.TrashedEntry,
+        errors=(404, 409, 423),
+    )
     def trash_entry(vault: Slug, entry: UUID) -> dict:
         """Move an entry to the vault's recycle bin."""
         return store.trash(ACTOR.get(), vault, entry)
 
-    @expose("POST", "/v1/vaults/{vault}/entries/{entry}/reveal")
+    @expose(
+        "POST",
+        "/v1/vaults/{vault}/entries/{entry}/reveal",
+        responses.ProtectedValue,
+        errors=(404, 423),
+    )
     def reveal_entry_field(vault: Slug, entry: UUID, field: Literal["password", "notes"]) -> dict:
         """Reveal one protected field. Return the value only to an authorized caller."""
         return store.reveal(ACTOR.get(), vault, entry, field)
 
-    @expose("PUT", "/v1/vaults/{vault}/entries/{entry}/totp")
+    @expose(
+        "PUT",
+        "/v1/vaults/{vault}/entries/{entry}/totp",
+        responses.TotpSetup,
+        errors=(404, 409, 423),
+    )
     def set_entry_totp(vault: Slug, entry: UUID, body: OTPSetup) -> dict:
         """Store an authenticator setup URI or Base32 seed as a protected field."""
         return store.set_totp(ACTOR.get(), vault, entry, body)
 
-    @expose("POST", "/v1/vaults/{vault}/entries/{entry}/totp/code")
+    @expose(
+        "POST",
+        "/v1/vaults/{vault}/entries/{entry}/totp/code",
+        responses.TotpCode,
+        errors=(404, 423),
+    )
     def generate_entry_totp(vault: Slug, entry: UUID) -> dict:
         """Generate the current TOTP code without returning the seed."""
         return store.totp(ACTOR.get(), vault, entry)
 
-    @expose("POST", "/v1/passwords/generate")
+    @expose("POST", "/v1/passwords/generate", responses.Password)
     def new_password(body: PasswordOptions) -> dict:
         """Create a cryptographically random password without writing it to a vault."""
         scope(ACTOR.get(), "entries:write")
         return {"password": generate_password(body)}
 
-    @expose("PUT", "/v1/vaults/{vault}/entries/{entry}/fields/{name}")
+    @expose(
+        "PUT",
+        "/v1/vaults/{vault}/entries/{entry}/fields/{name}",
+        responses.Name,
+        errors=(404, 409, 423),
+    )
     def set_entry_field(vault: Slug, entry: UUID, name: Slug, body: FieldUpdate) -> dict:
         """Write a protected custom field."""
         return store.set_field(ACTOR.get(), vault, entry, name, body)
 
-    @expose("POST", "/v1/vaults/{vault}/entries/{entry}/fields/{name}/reveal")
+    @expose(
+        "POST",
+        "/v1/vaults/{vault}/entries/{entry}/fields/{name}/reveal",
+        responses.ProtectedValue,
+        errors=(404, 423),
+    )
     def reveal_custom_field(vault: Slug, entry: UUID, name: Slug) -> dict:
         """Reveal one protected custom field."""
         return store.field(ACTOR.get(), vault, entry, name)
 
-    @expose("GET", "/v1/vaults/{vault}/entries/{entry}/attachments")
+    @expose(
+        "GET",
+        "/v1/vaults/{vault}/entries/{entry}/attachments",
+        list[responses.AttachmentInfo],
+        errors=(404, 423),
+    )
     def list_entry_attachments(vault: Slug, entry: UUID) -> list[dict]:
         """List attachment names and indexes."""
         return store.attachments(ACTOR.get(), vault, entry)
 
-    @expose("POST", "/v1/vaults/{vault}/entries/{entry}/attachments", 201)
+    @expose(
+        "POST",
+        "/v1/vaults/{vault}/entries/{entry}/attachments",
+        responses.Name,
+        201,
+        errors=(404, 409, 423),
+    )
     def add_entry_attachment(vault: Slug, entry: UUID, body: AttachmentCreate) -> dict:
         """Store up to 32 KiB of base64-encoded attachment data in the vault."""
         return store.add_attachment(ACTOR.get(), vault, entry, body)
 
-    @expose("GET", "/v1/vaults/{vault}/entries/{entry}/attachments/{index}")
+    @expose(
+        "GET",
+        "/v1/vaults/{vault}/entries/{entry}/attachments/{index}",
+        responses.AttachmentData,
+        errors=(404, 423),
+    )
     def get_entry_attachment(vault: Slug, entry: UUID, index: Index) -> dict:
         """Read the selected attachment as base64."""
         return store.attachment(ACTOR.get(), vault, entry, index)

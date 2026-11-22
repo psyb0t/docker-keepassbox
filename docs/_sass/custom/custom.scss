@@ -19,6 +19,29 @@
   font-size: 0.95em;
 }
 
+.main-content .api-endpoints {
+  width: 100%;
+  table-layout: fixed;
+
+  th:first-child {
+    width: 33%;
+  }
+
+  td,
+  th,
+  td code {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 50rem) {
+  .main-content .api-endpoints td,
+  .main-content .api-endpoints th {
+    padding: 0.35rem 0.4rem;
+  }
+}
+
 .main-content pre code,
 .main-content div.highlighter-rouge code {
   font-size: 0.9412rem;

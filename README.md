@@ -19,10 +19,11 @@ Put KeePass behind REST and MCP. Create a vault, rotate its master password, tur
 
 ## Quick start
 
-Run this as your regular Docker user on Linux. You need Docker Compose, curl, and OpenSSL.
+Run this as your regular Docker user on Linux. You need Docker Compose, curl, and OpenSSL. Install jq to use the token command.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/psyb0t/docker-keepassbox/main/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
 keepassbox start
 ```
 

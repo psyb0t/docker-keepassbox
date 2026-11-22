@@ -28,7 +28,8 @@ trap 'log ERROR "KeePassBox command failed at line $LINENO"' ERR
 usage() {
 	printf '%s\n' \
 		'Usage: bash install.sh [--version latest|vX.Y.Z] [--port PORT]' \
-		'       keepassbox start|stop|status|token|config|uninstall' \
+		'       keepassbox start|stop|status|url|config|uninstall' \
+		'       keepassbox token [--owner OWNER]' \
 		'       keepassbox logs [tailscale]' \
 		'       keepassbox upgrade [--version latest|vX.Y.Z]'
 }
@@ -324,6 +325,21 @@ start_stack() {
 	esac
 }
 
+show_token() {
+	local owner='' token
+	if (($#)); then
+		[[ $# == 2 && "$1" == --owner && "$2" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] ||
+			fail 'Usage: keepassbox token [--owner OWNER]'
+		owner="$2"
+	fi
+	command -v jq >/dev/null || fail 'Install jq to read the token, or read access.local.json directly.'
+	token="$(jq -er --arg owner "$owner" '
+		[.clients[] | select($owner == "" or .owner == $owner)] |
+		select(length == 1) | .[0].token | select(type == "string" and length >= 32)
+	' "$access")" || fail 'Select an owner with exactly one client, or use the assigned token from access.local.json.'
+	printf '%s\n' "$token"
+}
+
 upgrade_stack() {
 	local tag port
 	tag="$(setting KEEPASSBOX_IMAGE_TAG latest)"
@@ -350,6 +366,10 @@ manage() {
 		upgrade_stack "$@"
 		return
 	fi
+	if [[ "$action" == token ]]; then
+		show_token "$@"
+		return
+	fi
 	if [[ "$action" == logs && "$#" == 1 && "$1" == tailscale ]]; then
 		require_docker
 		compose --profile tailscale logs -f tailscale
@@ -357,8 +377,11 @@ manage() {
 	fi
 	(($# == 0)) || fail "Unexpected arguments for $action."
 	case "$action" in
-	token)
-		awk -F '"' '$2 == "token" { print $4; exit }' "$access"
+	url)
+		local port
+		port="${KEEPASSBOX_PORT:-$(setting KEEPASSBOX_PORT 8000)}"
+		validate_port "$port"
+		printf 'http://127.0.0.1:%s\n' "$port"
 		return
 		;;
 	config)

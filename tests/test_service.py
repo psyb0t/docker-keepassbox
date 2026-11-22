@@ -303,6 +303,24 @@ def test_description_endpoints(client):
         assert denied.status_code == 401
         assert denied.headers["WWW-Authenticate"] == "Bearer"
         assert client.get(path, headers=auth()).status_code == 200
+    schema = client.get("/openapi.json", headers=auth()).json()
+    assert schema["components"]["securitySchemes"]["HTTPBearer"] == {
+        "type": "http",
+        "scheme": "bearer",
+    }
+    assert "security" not in schema["paths"]["/healthz"]["get"]
+    for path, operations in schema["paths"].items():
+        if not path.startswith("/v1/"):
+            continue
+        for operation in operations.values():
+            assert operation["security"] == [{"HTTPBearer": []}]
+            statuses = operation["responses"]
+            assert statuses["422"]["content"]["application/json"]["schema"] == {
+                "$ref": "#/components/schemas/ProblemResponse",
+            }
+            success = next(value for status, value in statuses.items() if status.startswith("2"))
+            response = success["content"]["application/json"]["schema"]
+            assert "$ref" in response or response.get("type") == "array"
     result = mcp_request(
         client,
         "initialize",
