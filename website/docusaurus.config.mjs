@@ -1,10 +1,11 @@
 const repository = "https://github.com/psyb0t/docker-keepassbox";
+const baseUrl = "/docker-keepassbox/";
 
 export default {
   title: "KeePassBox",
   tagline: "KeePass vaults over REST and MCP",
   url: "https://psyb0t.github.io",
-  baseUrl: "/docker-keepassbox/",
+  baseUrl,
   trailingSlash: true,
   future: { faster: { rspackBundler: true, swcJsLoader: true } },
   organizationName: "psyb0t",
@@ -15,6 +16,7 @@ export default {
   presets: [
     ["classic", {
       blog: false,
+      sitemap: { ignorePatterns: [baseUrl + "search", baseUrl + "search/"] },
       docs: {
         path: ".content",
         routeBasePath: "/",

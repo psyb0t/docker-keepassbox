@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Exclude the internal search page from the documentation sitemap.
 - Publish the documentation through the shared GitHub Pages workflow.
 - Build the GitHub Pages site with Docusaurus. Find the REST walkthrough and generated endpoint pages under one REST API entry.
 - Render the searchable REST reference from OpenAPI, with parameter descriptions, copyable curl requests, response examples, and error codes for each endpoint.
