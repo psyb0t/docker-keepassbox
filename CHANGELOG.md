@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Match the project directory's colors and typography, and link back to All projects from the docs navbar.
 - Exclude the internal search page from the documentation sitemap.
 - Publish the documentation through the shared GitHub Pages workflow.
 - Build the GitHub Pages site with Docusaurus. Find the REST walkthrough and generated endpoint pages under one REST API entry.
